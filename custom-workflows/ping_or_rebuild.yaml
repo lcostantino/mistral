@@ -1,0 +1,139 @@
+# This example requires the following properties provided in execution context:
+# - nova_url  ## url to Nova service, e.g. http://0.0.0.0:8774/v3
+# - server_name ## Name you want to give to new instance
+
+Namespaces:
+  Nova:
+    class: std.http
+    actions:
+      check-instance-network:
+        base-parameters:
+          url: '{$.nova_url}/{$.project}/os-fping/{$.instance_id}'
+          method: GET
+          headers:
+            X-Auth-Token: $.openstack.auth_token
+            Content-Type: application/json
+        output:
+          ping_output: $.content.server.alive
+
+      rebuild:
+        base-parameters:
+          url: '{$.nova_url}/{$.project}/servers/{$.instance_id}/action'
+          method: POST
+          headers:
+            X-Auth-Token: $.openstack.auth_token
+            Content-Type: application/json
+          body:
+            rebuild:
+              imageRef: "{$.image_id}"
+        output:
+          result: $.content 
+      
+      start:
+        base-parameters:
+          url: '{$.nova_url}/{$.project}/servers/{$.instance_id}/action'
+          method: POST
+          headers:
+            X-Auth-Token: $.openstack.auth_token
+            Content-Type: application/json
+          body:
+            os-start: null
+        output:
+          result: $.content 
+
+      getImage:
+        base-parameters:
+          url: '{$.nova_url}/{$.project}/servers/{$.instance_id}'
+          method: GET
+          headers:
+            X-Auth-Token: $.openstack.auth_token
+            Content-Type: application/json
+      
+        output:
+          image_id: "$.content.server.image.id"
+
+
+Workflow:
+  tasks:
+    post-instance-check:
+      action: Nova.check-instance-network
+      retry:
+        count: 3
+        delay: 7
+        break-on: $.ping_output = True 
+      publish:
+        ping_output: $.ping_output
+      parameters:
+        nova_url: $.nova_url
+        project: $.project
+        auth_token: $.auth_token
+        instance_id: $.instance_id
+      is-error-if: $.ping_output!=True
+      on-success: sendResultEmail
+      on-error: get-server-image
+
+    get-server-image:
+      action: Nova.getImage
+      parameters:
+        nova_url: $.nova_url
+        project: $.project
+        auth_token: $.auth_token
+        instance_id: $.instance_id
+      publish:
+        image_id: $.image_id
+      on-success: try-rebuild
+
+    try-rebuild:
+      action: Nova.rebuild
+      retry:
+        count: 2
+        delay: 15
+      parameters:
+        nova_url: $.nova_url
+        project: $.project
+        auth_token: $.auth_token
+        instance_id: $.instance_id
+        image_id: $.image_id
+      publish:
+        output: 'Had to rebuild {$.result}'
+      on-success: startVM
+
+    startVM:
+      action: Nova.start
+      retry:
+        count: 2
+        delay: 20
+      parameters:
+        nova_url: $.nova_url
+        project: $.project
+        auth_token: $.auth_token
+        instance_id: $.instance_id
+      on-finish: sendResultEmailRebuild
+
+    sendResultEmail:
+      action: std.email
+      parameters:
+        params:
+          to: [$.admin_email]
+          subject: Healing Notification - Post Build check
+          body: |
+            The result of the post-build-check was OK for {$.instance_id}
+            -- Thanks - Healing
+        settings:
+          smtp_server: 127.0.0.1
+          from: healing@jp1-20
+
+    sendResultEmailRebuild:
+      action: std.email
+      parameters:
+        params:
+          to: [$.admin_email]
+          subject: Healing Notification - Post Build check [ FAIL ]
+          body: |
+            The result of the post-build-check failed for {$.instance_id} a rebuild was triggered.
+            it should be post-build checked by this workflow after instance creation automatically.
+            -- Thanks - Healing
+        settings:
+          smtp_server: 127.0.0.1
+          from: healing@jp1-20
+

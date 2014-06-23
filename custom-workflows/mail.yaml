@@ -1,0 +1,21 @@
+# This example requires the following properties provided in execution context:
+# - admin_email ## email address to send notifications to
+# - smtp_server ## SMTP server to use for sending emails (e.g. smtp.gmail.com:587)
+# - output
+Workflow:
+  tasks:
+    sendResultEmail:
+      action: std.email
+      parameters:
+        params:
+          to: [$.admin_email]
+          subject: Healing Notification {$.output}
+          body: |
+            This alarm was triggered as result of Track Log ID {$.request_id}
+            The affected resource is {$.output}
+
+            -- Thanks - Healing 
+        settings:
+          smtp_server: $.smtp_server
+          from: healing@jp1-20
+
