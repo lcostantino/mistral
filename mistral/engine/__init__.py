@@ -171,9 +171,10 @@ class Engine(object):
             wf_trace_msg += ']' if state == states.ERROR \
                 else ", result = %s]" % result
             WORKFLOW_TRACE.info(wf_trace_msg)
-
+            
             task_output = data_flow.get_task_output(task, result)
-
+            if data_flow.check_is_error_if(task, task_output):
+                state = states.ERROR
             # Update task state.
             task, outbound_context = self._update_task(workbook, task, state,
                                                        task_output)

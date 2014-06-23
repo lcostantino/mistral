@@ -82,6 +82,9 @@ class TaskSpec(base.BaseSpec):
     def get_full_action_name(self):
         return self.action
 
+    def get_is_error_if(self):
+        return self._get_on_state("is-error-if")
+
     def is_retry_task(self):
         return self.get_property("retry") is not None
 

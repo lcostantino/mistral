@@ -54,6 +54,19 @@ def get_task_output(task, result):
 
     return output
 
+def check_is_error_if(task, result):
+    """ If the evaluation returns True, set the task in ERROR state.
+        They must be expresions able to return True/False
+    """
+    publish_transformer = task['task_spec'].get('is-error-if')
+    if not publish_transformer:
+        return False
+   
+    output = expr.evaluate_recursively(publish_transformer, result) or {}
+    if output and output == True:
+        return True
+    return False
+    
 
 def _merge_dicts(target, src):
     for key in src:
